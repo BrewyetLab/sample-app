@@ -1,0 +1,58 @@
+name: Deploy to app01
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sample-app-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Production
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TARGET="/opt/apps/production/sample-app"
+
+          echo "Deploying commit: $GITHUB_SHA"
+
+          mkdir -p "$TARGET"
+
+          rsync -av --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.env' \
+            ./ "$TARGET/"
+
+          cd "$TARGET"
+
+          docker compose pull
+          docker compose up -d --build --remove-orphans
+
+          echo "Deployment complete."
+
+      - name: Verify container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f /opt/apps/production/sample-app/compose.yaml \
+            ps
